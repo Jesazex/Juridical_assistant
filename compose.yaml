@@ -1,0 +1,25 @@
+services:
+  knowledge-db:
+    image: pgvector/pgvector:0.8.7-pg17-trixie
+    environment:
+      POSTGRES_DB: psb_knowledge
+      POSTGRES_USER: psb_knowledge_admin
+      POSTGRES_PASSWORD: ${PSB_KNOWLEDGE_ADMIN_PASSWORD:?Set PSB_KNOWLEDGE_ADMIN_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${PSB_KNOWLEDGE_PORT:-5433}:5432"
+    volumes:
+      - knowledge-data:/var/lib/postgresql/data
+      - ./migrations/001_knowledge.sql:/docker-entrypoint-initdb.d/001_knowledge.sql:ro
+    networks:
+      - knowledge
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "psb_knowledge_admin", "-d", "psb_knowledge"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  knowledge-data:
+
+networks:
+  knowledge:
