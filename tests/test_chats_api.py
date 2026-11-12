@@ -1,5 +1,6 @@
 """HTTP integration tests against a fresh, separate SQLite database per test."""
 from datetime import datetime
+from uuid import UUID
 
 import pytest
 from anyio.from_thread import start_blocking_portal
@@ -92,8 +93,16 @@ def test_missing_identity(client, method, path, payload, cookie):
     if cookie is not None:
         client.cookies.set("anon_id", cookie)
     response = client.request(method, URL + path, **({"json": payload} if payload is not None else {}))
-    assert response.status_code == 401
-    assert response.json() == {"detail": "anon_id cookie is required"}
+    assert response.status_code == (201 if method == "post" else 200 if path == "" else 404)
+    generated = response.cookies["anon_id"]
+    assert UUID(generated).version == 4
+    for attribute in ["HttpOnly", "SameSite=lax", "Path=/", "Max-Age=2592000"]:
+        assert attribute in response.headers["set-cookie"]
+    client.cookies.clear()
+    client.cookies.set("anon_id", generated)
+    repeated = client.get(URL)
+    assert "set-cookie" not in repeated.headers
+    assert repeated.json()["total"] == (1 if method == "post" else 0)
 
 
 def test_pagination_sorting_and_isolation(client):
@@ -166,7 +175,7 @@ def test_swagger_openapi_and_existing_health(client):
                 assert "content" not in response
             else:
                 assert "$ref" in response["content"]["application/json"]["schema"]
-            assert any(p["name"] == "anon_id" and p["in"] == "cookie" for p in operation["parameters"])
+            assert not any(p["in"] == "cookie" for p in operation.get("parameters", []))
     assert "requestBody" not in document["paths"][URL]["get"]
     assert client.get("/api/v1/health").json()["status"] == "ok"
 
@@ -187,3 +196,41 @@ def test_update_same_title_refreshes_timestamp(client):
     assert updated["updated_at"] > original["updated_at"]
 
 
+
+
+@pytest.mark.parametrize("path", ["/docs", "/openapi.json", "/api/v1/health", "/missing"])
+def test_cookie_on_every_route(client, path):
+    client.cookies.clear()
+    response = client.get(path)
+    assert UUID(response.cookies["anon_id"]).version == 4
+    assert "set-cookie" not in client.get(path).headers
+
+
+def test_secure_cookie(client, monkeypatch):
+    from app.main import settings
+    monkeypatch.setattr(settings, "anon_cookie_secure", True)
+    client.cookies.clear()
+    assert "Secure" in client.get("/docs").headers["set-cookie"]
+
+
+def test_cors_configuration():
+    from fastapi import FastAPI
+    from pydantic import ValidationError
+    from starlette.middleware.cors import CORSMiddleware
+    from app.core.config import Settings
+    with pytest.raises(ValidationError):
+        Settings(cors_origins=["*"], _env_file=None)
+    config = Settings(cors_origins=["http://localhost:5173"], _env_file=None)
+    api = FastAPI()
+    api.add_middleware(CORSMiddleware, allow_origins=config.cors_origins,
+                       allow_credentials=True, allow_methods=["POST"],
+                       allow_headers=["Content-Type"])
+    with TestClient(api) as http:
+        headers = {"Origin": config.cors_origins[0],
+                   "Access-Control-Request-Method": "POST"}
+        response = http.options("/", headers=headers)
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == config.cors_origins[0]
+        assert response.headers["access-control-allow-credentials"] == "true"
+        headers["Origin"] = "https://untrusted.example"
+        assert http.options("/", headers=headers).status_code == 400

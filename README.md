@@ -1,4 +1,4 @@
-﻿# Juridical Assistant
+# Juridical Assistant
 
 FastAPI application with an asynchronous chat API. LLM, RAG and message modules
 remain placeholders.
@@ -16,10 +16,22 @@ Before production deployment, add versioned migrations in `migrations/`.
 
 ## Chats API
 
-Every request must include a nonempty `anon_id` cookie, for example
-`Cookie: anon_id=alice`. Missing/blank identity returns 401 with
-`{"detail":"anon_id cookie is required"}`. The API does not issue cookies or
-register users. A caller must retain its anonymous identifier between requests.
+Every HTTP request reuses a nonblank anon_id cookie or creates a UUID cookie.
+The browser retains it for 30 days (HttpOnly, SameSite=Lax, Path=/).
+Set ANON_COOKIE_SECURE=false for local HTTP and true for production HTTPS.
+AnonId remains a FastAPI dependency; owner_id filtering is unchanged.
+
+For a separate frontend origin, set CORS_ORIGINS to a JSON list of explicit
+origins, e.g. ["http://localhost:5173"], and use fetch credentials: "include"
+(or Axios withCredentials: true). Credentials are enabled; wildcards are rejected.
+Use the same hostname locally. SameSite=Lax supports same-site origins with
+different ports; unrelated frontend/backend sites need a same-site proxy deployment.
+
+Open /docs after clearing anon_id in browser DevTools. Loading /docs already
+creates the cookie. Execute POST /api/v1/chats/ with {} and then GET:
+the browser sends the same cookie automatically. Inspect Network request Cookie
+and response Set-Cookie headers, and Application/Storage cookies.
+Do not enter anon_id in Swagger or in JSON. HttpOnly prevents document.cookie access.
 
 | Method | Path | Input | Success |
 | --- | --- | --- | --- |

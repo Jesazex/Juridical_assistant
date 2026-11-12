@@ -1,7 +1,7 @@
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
-from fastapi import Cookie, Depends, HTTPException
+from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import session_factory
@@ -21,10 +21,8 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 DBSession = Annotated[AsyncSession, Depends(get_db)]
 
 
-async def get_anon_id(anon_id: Annotated[str | None, Cookie()] = None) -> str:
-    if anon_id is None or not anon_id.strip():
-        raise HTTPException(status_code=401, detail="anon_id cookie is required")
-    return anon_id
+async def get_anon_id(request: Request) -> str:
+    return request.state.anon_id
 
 
 AnonId = Annotated[str, Depends(get_anon_id)]

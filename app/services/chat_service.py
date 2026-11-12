@@ -32,7 +32,7 @@ async def list_chats(session: AsyncSession, owner_id: str, limit: int, offset: i
     return {"items": list(items), "total": total, "limit": limit, "offset": offset}
 
 
-async def update_chat(session: AsyncSession, owner_id: str, chat_id: int, title: str) -> Chat:
+async def rename_chat(session: AsyncSession, owner_id: str, chat_id: int, title: str) -> Chat:
     chat = await get_chat(session, owner_id, chat_id)
     chat.title = title
     chat.updated_at = utc_now()
