@@ -1,6 +1,32 @@
-from pydantic import Field, field_validator
+from datetime import datetime
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.base import BaseRequest
+
+
+class ChatCreate(BaseRequest):
+    title: str | None = Field(default=None, min_length=1, max_length=100)
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def strip_title(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+class ChatResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChatListResponse(BaseModel):
+    items: list[ChatResponse]
+    total: int
+    limit: int
+    offset: int
 
 
 class ChatUpdate(BaseRequest):

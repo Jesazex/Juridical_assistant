@@ -14,7 +14,7 @@ faiss-cpu==1.15.1
 chromadb==1.5.9
 rank-bm25==0.2.2
 bm25s==0.3.16
-scikit-learn==1.9.python -m pip list1
+scikit-learn==1.9.0
 rapidfuzz==3.14.1
 pandas==2.3.3
 pypdf==6.21.4
@@ -24,3 +24,6 @@ lxml==6.0.2
 PyYAML==6.0.3
 SQLAlchemy==2.0.44
 tiktoken==0.12.0
+pydantic-settings>=2,<3
+aiosqlite>=0.20,<1
+asyncpg>=0.30,<1

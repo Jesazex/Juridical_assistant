@@ -6,6 +6,11 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.config import get_settings
+from sqlalchemy.orm import DeclarativeBase
+
+
+class Base(DeclarativeBase):
+    pass
 
 
 settings = get_settings()
@@ -15,7 +20,7 @@ settings = get_settings()
 # SQL-вывод не зависит от debug приложения: параметры могут содержать
 # юридическую переписку. Скрываем их также в сообщениях об ошибках SQLAlchemy.
 engine = create_async_engine(
-    settings.database.url,#!!!!!надо добавить нормальный url db и определить его в конфиге
+    settings.database_url,
     echo=False,
     hide_parameters=True,
 )

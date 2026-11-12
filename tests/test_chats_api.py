@@ -2,13 +2,15 @@
 from datetime import datetime
 
 import pytest
+from anyio.from_thread import start_blocking_portal
 from fastapi.testclient import TestClient
 from sqlalchemy import inspect
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.schema import CreateTable
+from sqlalchemy.pool import NullPool
 
-from app.api.dependencies import get_db
+from app.api import dependencies
 from app.db.database import Base
 from app.db.models.chat import Chat
 from app.main import app
@@ -16,30 +18,34 @@ from app.main import app
 URL = "/api/v1/chats/"
 
 
-@pytest.fixture
-def client(tmp_path):
-    engine = create_async_engine(f"sqlite+aiosqlite:///{(tmp_path / 'test.db').as_posix()}")
-    sessions = async_sessionmaker(engine, expire_on_commit=False)
-
-    async def override_db():
-        async with sessions() as session:
-            yield session
+@pytest.fixture(scope="function")
+def test_database(tmp_path, monkeypatch):
+    # Setup and HTTP requests run in different portals; do not share pooled connections.
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{(tmp_path / 'test.db').as_posix()}",
+        poolclass=NullPool,
+    )
+    monkeypatch.setattr(
+        dependencies, "session_factory", async_sessionmaker(engine, expire_on_commit=False)
+    )
 
     async def setup():
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
 
-    app.dependency_overrides[get_db] = override_db
-    try:
-        with TestClient(app) as http:
-            http.portal.call(setup)
-            http.cookies.set("anon_id", "alice")
-            try:
-                yield http
-            finally:
-                http.portal.call(engine.dispose)
-    finally:
-        app.dependency_overrides.pop(get_db, None)
+    with start_blocking_portal() as portal:
+        try:
+            portal.call(setup)
+            yield
+        finally:
+            portal.call(engine.dispose)
+
+
+@pytest.fixture(scope="function")
+def client(test_database):
+    with TestClient(app) as http:
+        http.cookies.set("anon_id", "alice")
+        yield http
 
 
 def assert_chat(response, status=200):
@@ -171,3 +177,13 @@ def test_postgresql_ddl_and_owner_index():
     assert "VARCHAR(100)" in ddl
     assert any([column.name for column in index.columns] == ["owner_id"] for index in Chat.__table__.indexes)
     assert not inspect(Chat).relationships  # Message and ChatMemory are still empty placeholders.
+
+
+def test_update_same_title_refreshes_timestamp(client):
+    original = assert_chat(client.post(URL, json={"title": "Договор"}), 201)
+    updated = assert_chat(client.patch(URL + str(original["id"]), json={"title": "Договор"}))
+    assert updated["title"] == original["title"]
+    assert updated["created_at"] == original["created_at"]
+    assert updated["updated_at"] > original["updated_at"]
+
+

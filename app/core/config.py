@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = True
     api_v1_prefix: str = "/api/v1"
+    database_url: str = "sqlite+aiosqlite:///./juridical_assistant.db"
     # добавить DataBaseConnection
     # DATABASE_URL=
 
