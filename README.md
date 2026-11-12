@@ -1,18 +1,21 @@
-# PSB · база знаний
+# PSB · документы и память чатов
 
-Первый этап юридического ассистента. Миграция создаёт реестр документов, их редакции и фрагменты в PostgreSQL 17 с расширением pgvector. Дерево Python повторяет `startup_dirs.TXT`. Импорт корпуса, вычисление эмбеддингов и API поиска относятся к следующим этапам.
+Юридический ассистент хранит нормативные документы в схеме `knowledge`, а историю и память пользователей — в схеме `chat` одной базы PostgreSQL 17 с pgvector. Внешний ключ связывает цитату с фрагментом документа. Память чата используется для уточнения контекста вопроса, а юридические источники берутся из применимых редакций документов.
 
 Настройка ниже относится к веб-прототипу. Автоматическая проверка хакатона отдельно запускает `solution.py` с `questions.csv` и `knowledge-base.zip` из `DATA_DIR`. Автоматический сабмит на этом этапе ещё не реализован.
 
 ## Локальный запуск
 
-Понадобится Docker с Compose v2. Скопируйте `.env.example` в `.env` и задайте собственный пароль в `PSB_KNOWLEDGE_ADMIN_PASSWORD`. PostgreSQL доступен на `127.0.0.1:5433`. Порт можно изменить в `PSB_KNOWLEDGE_PORT`.
+Понадобятся Python 3.12 или 3.13 и Docker с Compose v2. В PyCharm выберите интерпретатор `.venv` и корень проекта как рабочую папку. Если `.env` ещё нет, скопируйте `.env.example` и задайте пароль в `PSB_KNOWLEDGE_ADMIN_PASSWORD`. Укажите `PSB_DATABASE_URL` в формате `postgresql+asyncpg://psb_knowledge_admin:<URL-encoded-password>@127.0.0.1:5433/psb_knowledge`. Используйте порт из `PSB_KNOWLEDGE_PORT`. Из сети Compose адрес базы — `knowledge-db:5432`.
 
 ```powershell
+python -m pip install -r requirements.txt
 docker compose up -d --wait knowledge-db
+python -m alembic upgrade head
+python -m alembic current
 ```
 
-Docker выполняет миграцию при первом запуске на пустом томе. Для существующей пустой базы `psb_knowledge`, где миграция ещё не применялась, запустите её один раз от администратора.
+На пустом томе Docker выполняет `migrations/001_knowledge.sql`. Alembic проверяет наличие этой структуры, фиксирует baseline и добавляет таблицы чатов и цитат. На существующем томе с готовой схемой `knowledge` достаточно `python -m alembic upgrade head`. Для отдельной пустой базы, созданной вручную, сначала примените исходный SQL от администратора.
 
 ```powershell
 Get-Content -Raw -Encoding utf8 migrations/001_knowledge.sql | docker compose exec -T knowledge-db psql -v ON_ERROR_STOP=1 -U psb_knowledge_admin -d psb_knowledge
@@ -22,9 +25,11 @@ Get-Content -Raw -Encoding utf8 migrations/001_knowledge.sql | docker compose ex
 
 ```powershell
 Get-Content -Raw -Encoding utf8 scripts/check_knowledge_db.sql | docker compose exec -T knowledge-db psql -v ON_ERROR_STOP=1 -U psb_knowledge_admin -d psb_knowledge
+python -m scripts.check_python_db
+python -m pytest -q
 ```
 
-В Windows PowerShell 5.1 перед передачей SQL через конвейер установите `$OutputEncoding = [System.Text.UTF8Encoding]::new($false)`, чтобы сохранить русский текст. Проверка создаёт тестовые данные внутри транзакции и откатывает их после проверок связей, даты, размерности вектора, поиска и прав. Она также проверяет, что посторонняя роль не может подключиться к базе.
+В Windows PowerShell 5.1 перед передачей SQL через конвейер установите `$OutputEncoding = [System.Text.UTF8Encoding]::new($false)`, чтобы сохранить русский текст. SQL и Python создают тестовые записи в транзакции и затем откатывают её. Python проверяет восемь таблиц, каскадное удаление, доступ к истории, повторную генерацию и поиск памяти.
 
 ## Данные и доступ
 
@@ -32,13 +37,21 @@ Get-Content -Raw -Encoding utf8 scripts/check_knowledge_db.sql | docker compose 
 - `knowledge.document_versions` хранит редакции с SHA-256 содержимого. Период действия начинается в `effective_from` включительно и заканчивается перед `effective_to`. `NULL` в дате начала означает, что дата неизвестна. `NULL` в дате окончания может означать открытый период или отсутствие данных о его конце. Историческую применимость нужно подтверждать источником. Если редакции для одной даты пересекаются, выбор и учёт допсоглашений остаются задачей обработки корпуса.
 - `knowledge.document_chunks` хранит порядок фрагмента, путь к разделу, текст, страницы при наличии и вектор из 1024 компонент. Пока вектор не вычислен, поле `embedding` может быть `NULL`. Для будущего импорта планируется BAAI/bge-m3 из кейса. Для текста есть GIN-индекс с русской конфигурацией, для векторов — HNSW с косинусной дистанцией.
 
-Документы работают на отдельном экземпляре PostgreSQL со своим томом и сетью Compose. Доступ `PUBLIC` к базе отозван. Для backend выдайте отдельной роли с `LOGIN` членство в `psb_knowledge_reader`. Эта роль читает только три таблицы документов. Учётная запись `psb_knowledge_admin` предназначена для настройки базы. Будущему сервису чатов потребуется собственное подключение к отдельному экземпляру. Источник для ответа можно будет сохранять на стороне чатов по UUID фрагмента и снимку цитаты.
+- `chat.anonymous_users`, `chat.chats`, `chat.messages` и `chat.chat_memory` хранят пользователей, их чаты, сообщения и контекст. Запросы к репозиториям ограничены владельцем и чатом.
+- `chat.answer_citations` хранит UUID фрагмента и снимок источника. Удаление чата каскадно удаляет его сообщения, память и цитаты. Документы остаются в `knowledge`.
+
+Для миграций и локальной проверки используется `psb_knowledge_admin`. Отдельным прикладным ролям с `LOGIN` можно выдать членство в `psb_knowledge_reader` для чтения документов или в `psb_chat_backend` для работы с чатами и чтения документов. Второй backend отвечает за анонимную cookie, передачу проверенного `owner_id` и транзакции.
+
+Сохраняйте сообщение пользователя и резервируйте `pending`-ответ до вызова модели. У новой попытки `started_at` передаётся в `complete_answer` или `fail_answer`, чтобы поздний ответ старого запроса не перезаписал новую попытку. Репозиторий создаёт снимки из найденных UUID фрагментов после того, как backend проверит, что они подтверждают ответ.
+
+Клиент BAAI/bge-m3 читает `LLM_BASE_URL`, `LLM_API_KEY` и при необходимости `EMB_MODEL` из окружения или `.env`. Поиск памяти объединяет косинусный и русскоязычный полнотекстовый поиск в пределах одного чата. Автоматический импорт корпуса, гибридный поиск по документам и проверка юридических ответов относятся к следующему этапу.
 
 ## Структура командного проекта
 
-- `app/`: API, configuration, database, services, LLM and RAG modules.
-- `knowledge_base/`: source documents for retrieval.
-- `scripts/`: knowledge base ingestion scripts.
-- `migrations/`: database migrations.
-- `tests/`: test placeholders.
-- `frontend/`: frontend placeholder.
+- `app/`: модули API, БД, RAG и интеграции с моделями.
+- `knowledge_base/`: исходные документы корпуса.
+- `scripts/`: проверка базы и каркас загрузки корпуса.
+- `migrations/`: исходный SQL для нового тома.
+- `db_migrations/`: история миграций Alembic.
+- `tests/`: тесты Python.
+- `frontend/`: каркас интерфейса.

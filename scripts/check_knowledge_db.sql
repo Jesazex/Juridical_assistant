@@ -112,14 +112,10 @@ BEGIN
         FROM pg_class AS c
         JOIN pg_namespace AS n ON n.oid = c.relnamespace
         WHERE c.relkind IN ('r', 'p')
-          AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-          AND (n.nspname, c.relname) NOT IN (
-              ('knowledge', 'documents'),
-              ('knowledge', 'document_versions'),
-              ('knowledge', 'document_chunks')
-          )
+          AND n.nspname = 'knowledge'
+          AND c.relname NOT IN ('documents', 'document_versions', 'document_chunks')
     ) THEN
-        RAISE EXCEPTION 'Unexpected application tables in the document database';
+        RAISE EXCEPTION 'Unexpected tables in knowledge schema';
     END IF;
 END;
 $$;
