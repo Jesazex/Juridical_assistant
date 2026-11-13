@@ -23,3 +23,12 @@ async def list_document_versions(
 
 async def get_document_chunk(session: AsyncSession, chunk_id: UUID) -> DocumentChunk | None:
     return await session.get(DocumentChunk, chunk_id)
+
+
+async def list_version_chunks(session: AsyncSession, version_id: UUID) -> list[DocumentChunk]:
+    chunks = await session.scalars(
+        select(DocumentChunk)
+        .where(DocumentChunk.version_id == version_id)
+        .order_by(DocumentChunk.chunk_index)
+    )
+    return list(chunks)

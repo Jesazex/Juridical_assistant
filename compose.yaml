@@ -18,8 +18,55 @@ services:
       timeout: 3s
       retries: 20
 
+  migrate:
+    image: psb-api:local
+    build: .
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    environment:
+      PSB_KNOWLEDGE_ADMIN_PASSWORD: ${PSB_KNOWLEDGE_ADMIN_PASSWORD:?Set PSB_KNOWLEDGE_ADMIN_PASSWORD in .env}
+      PSB_DATABASE_HOST: knowledge-db
+    depends_on:
+      knowledge-db:
+        condition: service_healthy
+    networks: [knowledge]
+
+  api:
+    image: psb-api:local
+    build: .
+    environment:
+      PSB_DATABASE_URL: ${PSB_CONTAINER_DATABASE_URL:-}
+      PSB_DATABASE_HOST: knowledge-db
+      PSB_KNOWLEDGE_ADMIN_PASSWORD: ${PSB_KNOWLEDGE_ADMIN_PASSWORD:?Set PSB_KNOWLEDGE_ADMIN_PASSWORD in .env}
+      PSB_COOKIE_SECURE: ${PSB_COOKIE_SECURE:-false}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [knowledge, web]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  frontend:
+    build: ./frontend
+    environment:
+      API_UPSTREAM: http://api:8000
+    ports:
+      - "127.0.0.1:${PSB_SITE_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [web]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
 volumes:
   knowledge-data:
 
 networks:
   knowledge:
+  web:

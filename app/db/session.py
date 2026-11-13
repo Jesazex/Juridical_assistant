@@ -27,9 +27,17 @@ def get_database_url() -> URL:
     if value is None:
         env_file = Path(__file__).resolve().parents[2] / ".env"
         value = dotenv_values(env_file, interpolate=False).get("PSB_DATABASE_URL")
-    if not value:
-        raise RuntimeError("Set PSB_DATABASE_URL in the environment or the project's .env")
-    return _parse_database_url(value)
+    if value:
+        return _parse_database_url(value)
+    host = os.environ.get("PSB_DATABASE_HOST")
+    password = os.environ.get("PSB_KNOWLEDGE_ADMIN_PASSWORD")
+    if host and password:
+        # Compose supplies the raw password so special characters need no URL escaping.
+        return URL.create(
+            "postgresql+asyncpg", username="psb_knowledge_admin", password=password,
+            host=host, port=5432, database="psb_knowledge",
+        )
+    raise RuntimeError("Set PSB_DATABASE_URL in the environment or the project's .env")
 
 
 def create_database_engine(database_url: str | URL | None = None) -> AsyncEngine:
