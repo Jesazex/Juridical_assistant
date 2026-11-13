@@ -1,4 +1,5 @@
-﻿"""Owner-scoped asynchronous chat operations. The caller owns the transaction."""
+"""Owner-scoped asynchronous chat operations. The caller owns the transaction."""
+from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,7 +11,7 @@ class ChatNotFound(Exception):
     pass
 
 
-async def get_chat(session: AsyncSession, owner_id: str, chat_id: int) -> Chat:
+async def get_chat(session: AsyncSession, owner_id: str, chat_id: UUID) -> Chat:
     chat = await session.scalar(select(Chat).where(Chat.id == chat_id, Chat.owner_id == owner_id))
     if chat is None:
         raise ChatNotFound
@@ -34,7 +35,7 @@ async def list_chats(session: AsyncSession, owner_id: str, limit: int, offset: i
     return {"items": list(items), "total": total, "limit": limit, "offset": offset}
 
 
-async def rename_chat(session: AsyncSession, owner_id: str, chat_id: int, title: str) -> Chat:
+async def rename_chat(session: AsyncSession, owner_id: str, chat_id: UUID, title: str) -> Chat:
     chat = await get_chat(session, owner_id, chat_id)
     chat.title = title
     chat.title_is_manual = True
@@ -43,7 +44,7 @@ async def rename_chat(session: AsyncSession, owner_id: str, chat_id: int, title:
     return chat
 
 
-async def delete_chat(session: AsyncSession, owner_id: str, chat_id: int) -> None:
+async def delete_chat(session: AsyncSession, owner_id: str, chat_id: UUID) -> None:
     chat = await get_chat(session, owner_id, chat_id)
     await session.delete(chat)
     await session.flush()

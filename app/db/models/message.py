@@ -1,7 +1,8 @@
 """Messages inherit ownership from their parent chat."""
+import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, ForeignKey, JSON, String, Text
+from sqlalchemy import Uuid, CheckConstraint, ForeignKey, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -16,8 +17,8 @@ class Message(Base):
         CheckConstraint("status IN ('pending', 'completed', 'failed')", name="message_status"),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    chat_id: Mapped[int] = mapped_column(ForeignKey("chats.id", ondelete="CASCADE"), index=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    chat_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("chats.id", ondelete="CASCADE"), index=True)
     role: Mapped[str] = mapped_column(String(20))
     content: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="completed")

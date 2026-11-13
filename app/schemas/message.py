@@ -1,3 +1,4 @@
+from uuid import UUID
 from datetime import datetime
 from typing import Literal
 
@@ -59,8 +60,8 @@ class MessageSource(BaseModel):
 class MessageResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    chat_id: int
+    id: UUID
+    chat_id: UUID
     role: Literal["user", "assistant"]
     content: str
     status: Literal["pending", "completed", "failed"]

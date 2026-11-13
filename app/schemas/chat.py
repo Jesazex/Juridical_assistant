@@ -1,3 +1,4 @@
+from uuid import UUID
 from datetime import datetime, timezone
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
@@ -16,7 +17,7 @@ class ChatCreate(BaseRequest):
 class ChatResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    id: UUID
     title: str
     created_at: datetime
     updated_at: datetime

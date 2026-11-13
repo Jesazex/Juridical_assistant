@@ -1,6 +1,6 @@
 """HTTP integration tests against a fresh, separate SQLite database per test."""
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from anyio.from_thread import start_blocking_portal
@@ -54,7 +54,7 @@ def assert_chat(response, status=200):
     assert response.headers["content-type"] == "application/json"
     data = response.json()
     assert set(data) == {"id", "title", "created_at", "updated_at"}
-    assert isinstance(data["id"], int)
+    assert UUID(data["id"]).version == 4
     datetime.fromisoformat(data["created_at"])
     datetime.fromisoformat(data["updated_at"])
     return data
@@ -84,8 +84,8 @@ def test_create_validation(client, payload):
 
 
 @pytest.mark.parametrize("method,path,payload", [
-    ("post", "", {}), ("get", "", None), ("get", "1", None),
-    ("patch", "1", {"title": "Новое"}), ("delete", "1", None),
+    ("post", "", {}), ("get", "", None), ("get", str(uuid4()), None),
+    ("patch", str(uuid4()), {"title": "Новое"}), ("delete", str(uuid4()), None),
 ])
 @pytest.mark.parametrize("cookie", [None, "", "   "])
 def test_missing_identity(client, method, path, payload, cookie):
@@ -137,7 +137,7 @@ def test_foreign_and_missing_chat(client, method):
     own = client.post(URL, json={"title": "Личный"}).json()
     client.cookies.set("anon_id", "bob")
     kwargs = {"json": {"title": "Взлом"}} if method == "patch" else {}
-    for chat_id in [own["id"], 999999]:
+    for chat_id in [own["id"], str(uuid4())]:
         response = client.request(method, URL + str(chat_id), **kwargs)
         assert response.status_code == 404
         assert response.json() == {"detail": "Chat not found"}
@@ -182,7 +182,7 @@ def test_swagger_openapi_and_existing_health(client):
 
 def test_postgresql_ddl_and_owner_index():
     ddl = str(CreateTable(Chat.__table__).compile(dialect=postgresql.dialect()))
-    assert "SERIAL" in ddl
+    assert "UUID" in ddl and "SERIAL" not in ddl
     assert "VARCHAR(100)" in ddl
     assert any([column.name for column in index.columns] == ["owner_id"] for index in Chat.__table__.indexes)
     assert inspect(Chat).relationships["messages"].cascade.delete_orphan
