@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from app.db.models import AnswerCitation, Message
-from app.schemas.base import BaseRequest, validate_text
+from app.schemas.base import BaseRequest, PaginatedResponse, PaginationQuery, validate_text
 
 
 class MessageCreate(BaseRequest):
@@ -17,9 +17,8 @@ class MessageCreate(BaseRequest):
         return validate_text(value)
 
 
-class MessageListQuery(BaseRequest):
+class MessageListQuery(PaginationQuery):
     limit: int = Field(default=50, ge=1, le=100)
-    offset: int = Field(default=0, ge=0)
 
 
 class MessageSource(BaseModel):
@@ -74,11 +73,8 @@ class MessageResponse(BaseModel):
         )
 
 
-class MessageListResponse(BaseModel):
-    items: list[MessageResponse]
-    total: int
-    limit: int
-    offset: int
+class MessageListResponse(PaginatedResponse[MessageResponse]):
+    pass
 
 
 class MessageExchangeResponse(BaseModel):

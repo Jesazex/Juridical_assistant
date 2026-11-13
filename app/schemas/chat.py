@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.schemas.base import BaseRequest, validate_text
+from app.schemas.base import BaseRequest, PaginatedResponse, PaginationQuery, validate_text
 
 
 class ChatCreate(BaseRequest):
@@ -24,9 +24,8 @@ class ChatUpdate(BaseRequest):
         return validate_text(value)
 
 
-class ChatListQuery(BaseRequest):
-    limit: int = Field(default=20, ge=1, le=100)
-    offset: int = Field(default=0, ge=0)
+class ChatListQuery(PaginationQuery):
+    pass
 
 
 class ChatResponse(BaseModel):
@@ -38,8 +37,5 @@ class ChatResponse(BaseModel):
     updated_at: datetime
 
 
-class ChatListResponse(BaseModel):
-    items: list[ChatResponse]
-    total: int
-    limit: int
-    offset: int
+class ChatListResponse(PaginatedResponse[ChatResponse]):
+    pass
