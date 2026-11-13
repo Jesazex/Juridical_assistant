@@ -1,5 +1,5 @@
-from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from datetime import datetime, timezone
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 from app.schemas.base import BaseRequest
 
@@ -20,6 +20,13 @@ class ChatResponse(BaseModel):
     title: str
     created_at: datetime
     updated_at: datetime
+
+    @field_serializer("created_at", "updated_at", when_used="json")
+    def serialize_utc(self, value: datetime) -> str:
+        """Preserve the existing timezone-less Chat JSON contract."""
+        if value.tzinfo is not None:
+            value = value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value.isoformat()
 
 
 class ChatListResponse(BaseModel):

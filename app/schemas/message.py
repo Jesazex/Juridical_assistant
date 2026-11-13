@@ -1,4 +1,7 @@
-from pydantic import Field, field_validator
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.base import BaseRequest
 
@@ -40,3 +43,39 @@ class MessageListQuery(BaseRequest):
     # размер страницы; offset=0 начинает историю с начала, ge=0 исключает минус.
     limit: int = Field(default=50, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
+
+
+class MessageSource(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    document_id: int | str | None = None
+    document_title: str | None = None
+    chunk_id: int | str | None = None
+    page: int | None = None
+    excerpt: str | None = None
+    url: str | None = None
+
+
+class MessageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    chat_id: int
+    role: Literal["user", "assistant"]
+    content: str
+    status: Literal["pending", "completed", "failed"]
+    sources: list[MessageSource]
+    created_at: datetime
+    updated_at: datetime
+
+
+class MessageListResponse(BaseModel):
+    items: list[MessageResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class MessageExchangeResponse(BaseModel):
+    user_message: MessageResponse
+    assistant_message: MessageResponse

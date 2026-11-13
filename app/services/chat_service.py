@@ -2,7 +2,8 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models.chat import Chat, utc_now
+from app.db.models.chat import Chat
+from app.core.datetime import utc_now
 
 
 class ChatNotFound(Exception):
@@ -19,6 +20,7 @@ async def get_chat(session: AsyncSession, owner_id: str, chat_id: int) -> Chat:
 async def create_chat(session: AsyncSession, owner_id: str, title: str | None) -> Chat:
     chat = Chat(owner_id=owner_id, title=title if title is not None else "Новый чат")
     session.add(chat)
+    chat.title_is_manual = title is not None
     await session.flush()
     return chat
 
@@ -35,6 +37,7 @@ async def list_chats(session: AsyncSession, owner_id: str, limit: int, offset: i
 async def rename_chat(session: AsyncSession, owner_id: str, chat_id: int, title: str) -> Chat:
     chat = await get_chat(session, owner_id, chat_id)
     chat.title = title
+    chat.title_is_manual = True
     chat.updated_at = utc_now()
     await session.flush()
     return chat

@@ -185,7 +185,7 @@ def test_postgresql_ddl_and_owner_index():
     assert "SERIAL" in ddl
     assert "VARCHAR(100)" in ddl
     assert any([column.name for column in index.columns] == ["owner_id"] for index in Chat.__table__.indexes)
-    assert not inspect(Chat).relationships  # Message and ChatMemory are still empty placeholders.
+    assert inspect(Chat).relationships["messages"].cascade.delete_orphan
 
 
 def test_update_same_title_refreshes_timestamp(client):

@@ -1,23 +1,13 @@
 """Chat HTTP contract. Foreign and absent chats are 404."""
-from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, Query, Response
 
-from app.api.dependencies import AnonId, DBSession
+from app.api.dependencies import AnonId, DBSession, chat_transaction
 from app.schemas.chat import ChatCreate, ChatListQuery, ChatListResponse, ChatResponse, ChatUpdate
 from app.services import chat_service
 
 router = APIRouter(responses={404: {"description": "Chat not found or owned by another user"}})
-
-
-@asynccontextmanager
-async def chat_transaction(db):
-    try:
-        async with db.begin():
-            yield
-    except chat_service.ChatNotFound:
-        raise HTTPException(status_code=404, detail="Chat not found") from None
 
 
 @router.post("/", response_model=ChatResponse, status_code=201)

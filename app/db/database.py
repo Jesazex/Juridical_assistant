@@ -7,6 +7,18 @@ from sqlalchemy.ext.asyncio import (
 
 from app.core.config import get_settings
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+from sqlite3 import Connection as SQLiteConnection
+from sqlalchemy.dialects.sqlite.aiosqlite import AsyncAdapt_aiosqlite_connection
+
+
+@event.listens_for(Engine, "connect")
+def enable_sqlite_foreign_keys(connection, connection_record):
+    if isinstance(connection, (SQLiteConnection, AsyncAdapt_aiosqlite_connection)):
+        cursor = connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 
 class Base(DeclarativeBase):
