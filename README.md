@@ -52,6 +52,49 @@ python -m pytest -q
 
 В Windows PowerShell 5.1 перед передачей SQL через конвейер установите `$OutputEncoding = [System.Text.UTF8Encoding]::new($false)`, чтобы сохранить русский текст. SQL и Python создают тестовые записи в транзакции и затем откатывают её. Python проверяет восемь таблиц, каскадное удаление, доступ к истории, повторную генерацию и поиск памяти.
 
+## Интеграционные тесты Chat API
+
+Тесты используют PostgreSQL 17 с pgvector из существующего сервиса `knowledge-db`
+в `compose.yaml`. Отдельный контейнер или установленный в Windows PostgreSQL не нужен.
+После установки и запуска Docker Desktop выполните из корня проекта:
+
+```powershell
+# Предварительно задайте PSB_KNOWLEDGE_ADMIN_PASSWORD в .env.
+docker compose up -d --wait knowledge-db
+# Выполнить один раз: создаёт отдельную пустую БД в существующем контейнере.
+docker compose exec -T knowledge-db createdb -U psb_knowledge_admin psb_knowledge_test
+```
+
+Если база `psb_knowledge_test` уже существует, повторять `createdb` не требуется.
+В `.env` или в переменных окружения PyCharm задайте:
+
+```dotenv
+TEST_DATABASE_URL=postgresql+asyncpg://psb_knowledge_admin:<URL-encoded-password>@127.0.0.1:5433/psb_knowledge_test
+```
+
+Используйте пароль из `PSB_KNOWLEDGE_ADMIN_PASSWORD` и порт из `PSB_KNOWLEDGE_PORT`.
+`PSB_DATABASE_URL` оставьте адресом рабочей базы, не подменяйте его тестовым.
+Затем запустите тесты в настроенном окружении проекта:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests -q -rs
+```
+
+При отсутствии `TEST_DATABASE_URL` интеграционные сценарии пропускаются с объяснением,
+остальные тесты выполняются. Некорректный URL или недоступная настроенная тестовая БД
+считаются ошибкой, а не причиной скрытого пропуска тестов.
+
+До подключения проверяются драйвер `postgresql+asyncpg`, суффикс имени БД `_test`
+и отличие от имени рабочей базы. В тестовой базе автоматически создаются расширение
+`vector`, схемы `knowledge`, `chat` и таблицы из текущих SQLAlchemy-моделей.
+Это проверка API и моделей, не проверка истории миграций: существующий baseline
+Alembic привязан к имени `psb_knowledge`. Применять рабочий bootstrap SQL или менять
+миграции для этих тестов не требуется.
+
+Каждый сценарий использует внешнюю транзакцию и savepoints, данные откатываются
+после теста. Тесты не выполняют `DROP`, `TRUNCATE` и не очищают рабочую базу.
+DeepSeek и RAG не вызываются. Полный прогон PostgreSQL-сценариев требует запущенного Docker.
+
 ## Данные и доступ
 
 - `knowledge.documents` хранит название, тип, номер при наличии, ссылку на файл в корпусе и метаданные.

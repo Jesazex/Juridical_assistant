@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Annotated
 from uuid import UUID
 
@@ -12,6 +13,7 @@ from app.core.security import (
     token_hash,
 )
 from app.db.repositories.chat_repository import upsert_anonymous_user
+from app.services.chat_service import ChatNotFound
 
 
 async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
@@ -45,3 +47,13 @@ OwnerId = Annotated[UUID, Depends(get_owner_id)]
 
 def chat_not_found() -> HTTPException:
     return HTTPException(status_code=404, detail="Chat not found")
+
+
+@asynccontextmanager
+async def chat_transaction(db: AsyncSession) -> AsyncIterator[None]:
+    """Commit successful chat operations and roll back before translating errors."""
+    try:
+        async with db.begin():
+            yield
+    except ChatNotFound as exc:
+        raise chat_not_found() from exc

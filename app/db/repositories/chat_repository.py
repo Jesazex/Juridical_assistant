@@ -26,8 +26,13 @@ async def upsert_anonymous_user(session: AsyncSession, token_hash: str) -> Anony
     return (await session.scalars(statement)).one()
 
 
-async def create_chat(session: AsyncSession, owner_id: UUID) -> Chat:
+async def create_chat(
+    session: AsyncSession, owner_id: UUID, title: str | None = None
+) -> Chat:
     chat = Chat(owner_id=owner_id)
+    if title is not None:
+        chat.title = title
+        chat.is_title_custom = True
     session.add(chat)
     await session.flush()
     return chat
@@ -42,13 +47,20 @@ async def get_owned_chat(
     return await session.scalar(statement)
 
 
-async def list_owned_chats(session: AsyncSession, owner_id: UUID) -> list[Chat]:
+async def list_owned_chats(
+    session: AsyncSession, owner_id: UUID, limit: int = 20, offset: int = 0
+) -> tuple[list[Chat], int]:
     result = await session.scalars(
         select(Chat)
         .where(Chat.owner_id == owner_id)
         .order_by(Chat.updated_at.desc(), Chat.id.desc())
+        .limit(limit)
+        .offset(offset)
     )
-    return list(result)
+    total = (await session.scalars(
+        select(func.count()).select_from(Chat).where(Chat.owner_id == owner_id)
+    )).one()
+    return list(result), total
 
 
 async def rename_owned_chat(
