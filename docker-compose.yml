@@ -1,2 +1,10 @@
 services:
-  
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8080:80"
+    environment:
+      API_UPSTREAM: http://host.docker.internal:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
