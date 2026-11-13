@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Literal
 from uuid import UUID
@@ -57,7 +58,7 @@ class MessageResponse(BaseModel):
 
     @classmethod
     def from_message(
-        cls, message: Message, citations: tuple[AnswerCitation, ...] = ()
+        cls, message: Message, citations: Sequence[AnswerCitation] = ()
     ) -> "MessageResponse":
         return cls(
             id=message.id,
