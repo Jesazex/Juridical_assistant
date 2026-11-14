@@ -1,16 +1,23 @@
 ﻿"""Application entry point."""
 from contextlib import asynccontextmanager
+import logging
 from os import environ
 from urllib.parse import urlsplit
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
+from _collections_abc import AsyncIterator
 
 from app.api.v1.router import api_router
+from app.core.config import get_deepseek_settings
 from app.db.session import create_database_engine, create_session_factory
+from app.llm.deepseec_coonection import DeepSeekClient
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CORS_ORIGINS = {
     "http://localhost:8080",
@@ -21,13 +28,33 @@ DEFAULT_CORS_ORIGINS = {
 
 
 @asynccontextmanager
-async def lifespan(application: FastAPI):
+async def lifespan(application: FastAPI)-> AsyncIterator[None]:
     engine = create_database_engine()
-    application.state.session_factory = create_session_factory(engine)
+    http_client: httpx.AsyncClient | None = None
+    application.state.deepseek_client = None
     try:
+        application.state.session_factory = create_session_factory(engine)
+        settings = get_deepseek_settings()
+        if settings.is_configured:
+            http_client = httpx.AsyncClient(
+                base_url=settings.base_url.rstrip("/") + "/",
+                headers={"Authorization": f"Bearer {settings.api_key}"},
+                timeout=settings.timeout,
+            )
+            application.state.deepseek_client = DeepSeekClient(http_client, settings.model)
+        else:
+            logger.warning(
+                "DeepSeek client is disabled; missing settings: %s",
+                ", ".join(settings.missing_parameters),
+            )
         yield
     finally:
-        await engine.dispose()
+        application.state.deepseek_client = None
+        try:
+            if http_client is not None:
+                await http_client.aclose()
+        finally:
+            await engine.dispose()
 
 
 def configured_origins() -> set[str]:
