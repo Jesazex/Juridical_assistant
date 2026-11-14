@@ -125,8 +125,10 @@ def chat_api(chat_database_url, monkeypatch):
                     factory = async_sessionmaker(
                         connection, expire_on_commit=False, join_transaction_mode='create_savepoint',
                     )
-                    monkeypatch.setattr(app.state, 'session_factory', factory, raising=False)
-                    monkeypatch.setattr(app.state, 'cookie_secure', False)
+                    # State stores attributes in a mapping; patch that mapping so
+                    # pytest restores the values correctly between scenarios.
+                    monkeypatch.setitem(app.state._state, 'session_factory', factory)
+                    monkeypatch.setitem(app.state._state, 'cookie_secure', False)
                     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
                     try:
                         async with (
@@ -315,7 +317,10 @@ def test_chat_routes_registered_in_application():
     assert set(paths['/api/v1/chats/{chat_id}']) == {'get', 'patch', 'delete'}
     assert paths['/api/v1/chats/']['post']['responses'].get('201')
     assert paths['/api/v1/chats/{chat_id}']['delete']['responses'].get('204')
-    assert not any('messages' in path or 'documents' in path for path in paths)
+    assert set(paths['/api/v1/chats/{chat_id}/messages/']) == {'get', 'post'}
+    assert set(paths['/api/v1/chats/{chat_id}/messages/{message_id}/retry']) == {'post'}
+    assert paths['/api/v1/chats/{chat_id}/messages/']['post']['responses'].get('201')
+    assert not any('documents' in path for path in paths)
 
 
 @pytest.mark.parametrize('value', [
@@ -363,7 +368,7 @@ def test_service_forwards_owner_and_raises_for_missing_chat(monkeypatch, operati
 def test_application_lifespan_initializes_without_database_connection(monkeypatch):
     # Engine creation is lazy; this does not attempt a connection or start a server.
     monkeypatch.setenv('PSB_DATABASE_URL', 'postgresql+asyncpg://localhost:5433/psb_knowledge_test')
-    monkeypatch.setattr(app.state, 'session_factory', None, raising=False)
+    monkeypatch.setitem(app.state._state, 'session_factory', None)
 
     async def scenario():
         async with app.router.lifespan_context(app):
