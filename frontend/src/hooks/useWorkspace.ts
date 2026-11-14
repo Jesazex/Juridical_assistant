@@ -38,6 +38,7 @@ export function useWorkspaceState() {
   );
   const [announcement, setAnnouncement] = useState("");
   const requestSeq = useRef(0);
+  const documentRequestSeq = useRef(0);
   const activeIdRef = useRef<Id | null>(null);
   activeIdRef.current = activeId;
 
@@ -343,9 +344,11 @@ export function useWorkspaceState() {
     }
   }, [activeId, messageOffset, messagesLoading]);
 
-  const openDocument = useCallback(async (source: Source | null, documentId?: Id) => {
+  const openDocument = useCallback(async (source: Source | null, documentId?: Id, versionId?: Id) => {
+    const seq = ++documentRequestSeq.current;
     const id = documentId ?? source?.document_id ?? null;
-    if (id == null) {
+    // Старый источник без версии показываем как snapshot, не подменяем текущей редакцией.
+    if (id == null || (source && source.version_id == null && versionId == null && !mockMode)) {
       setOpened({
         source,
         loading: false,
@@ -358,11 +361,23 @@ export function useWorkspaceState() {
       });
       return;
     }
-    setOpened({ source, doc: null, loading: true, error: null });
+    setOpened((current) => ({
+      source,
+      doc: !source && current?.doc?.id === id ? { ...current.doc, text: null } : null,
+      loading: true, error: null,
+    }));
     try {
-      const doc = await api.getDocument(id);
-      setOpened({ source, doc, loading: false, error: null });
+      const doc = await api.getDocument(id, versionId ?? source?.version_id ?? undefined);
+      if (seq !== documentRequestSeq.current) return;
+      setOpened((current) => ({
+        source, loading: false, error: null,
+        doc: {
+          ...doc,
+          versions: versionId != null && current?.doc?.id === id ? current.doc.versions : doc.versions,
+        },
+      }));
     } catch (error) {
+      if (seq !== documentRequestSeq.current) return;
       setOpened({
         source,
         loading: false,
@@ -383,7 +398,10 @@ export function useWorkspaceState() {
 
   const dismissBanner = useCallback(() => setBanner(null), []);
   const cancelDelete = useCallback(() => setDeleteTarget(null), []);
-  const closeDocument = useCallback(() => setOpened(null), []);
+  const closeDocument = useCallback(() => {
+    documentRequestSeq.current += 1;
+    setOpened(null);
+  }, []);
 
   return {
     mockMode,

@@ -56,7 +56,16 @@ export function App() {
           />
         ) : null}
       </div>
-      {workspace.opened ? <DocumentDialog opened={workspace.opened} onClose={workspace.closeDocument} /> : null}
+      {workspace.opened ? (
+        <DocumentDialog
+          opened={workspace.opened}
+          onClose={workspace.closeDocument}
+          onSelectVersion={(versionId) => {
+            const opened = workspace.opened;
+            if (opened?.doc) void workspace.openDocument(opened.source, opened.doc.id, versionId);
+          }}
+        />
+      ) : null}
       {workspace.deleteTarget ? (
         <ConfirmDialog
           chat={workspace.deleteTarget}

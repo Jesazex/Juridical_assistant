@@ -26,17 +26,19 @@ class MessageSource(BaseModel):
     document_id: str | None
     document_title: str
     chunk_id: UUID | None
+    version_id: UUID | None = None
     page: int | None
     excerpt: str | None
     url: str | None
     section: str | None
 
     @classmethod
-    def from_citation(cls, citation: AnswerCitation) -> "MessageSource":
+    def from_citation(cls, citation: AnswerCitation, version_id: UUID | None = None) -> "MessageSource":
         return cls(
             document_id=citation.document_id_snapshot,
             document_title=citation.document_title_snapshot,
             chunk_id=citation.chunk_id,
+            version_id=version_id,
             page=citation.page_snapshot,
             excerpt=citation.excerpt_snapshot,
             url=citation.url_snapshot,
@@ -58,7 +60,7 @@ class MessageResponse(BaseModel):
 
     @classmethod
     def from_message(
-        cls, message: Message, citations: Sequence[AnswerCitation] = ()
+        cls, message: Message, citations: Sequence[AnswerCitation | MessageSource] = ()
     ) -> "MessageResponse":
         return cls(
             id=message.id,
@@ -67,7 +69,10 @@ class MessageResponse(BaseModel):
             role=message.role,
             content=message.content,
             status=message.status or "completed",
-            sources=[MessageSource.from_citation(citation) for citation in citations],
+            sources=[
+                citation if isinstance(citation, MessageSource) else MessageSource.from_citation(citation)
+                for citation in citations
+            ],
             error_code=message.error_code,
             created_at=message.created_at,
             updated_at=message.updated_at,

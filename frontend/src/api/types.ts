@@ -20,6 +20,7 @@ export interface ChatPage {
 /** Поля источника совпадают с контрактом ответа AI из manual и MessageSource. */
 export interface Source {
   document_id?: Id | null;
+  version_id?: Id | null;
   document_title?: string | null;
   chunk_id?: Id | null;
   page?: number | null;
@@ -70,6 +71,10 @@ export interface DocumentDetail {
   title: string;
   text: string | null;
   group?: "company" | "law";
+  version_id?: Id | null;
+  version_label?: string | null;
+  versions?: Array<{ id: Id; version_label: string }>;
+  selected_version_id?: Id | null;
 }
 
 export interface AssistantApi {
@@ -82,7 +87,7 @@ export interface AssistantApi {
   sendMessage(chatId: Id, content: string): Promise<MessageExchange>;
   retryMessage(chatId: Id, messageId: Id): Promise<Message>;
   listDocuments(limit: number, offset: number): Promise<DocumentPage>;
-  getDocument(id: Id): Promise<DocumentDetail>;
+  getDocument(id: Id, versionId?: Id): Promise<DocumentDetail>;
 }
 
 export class ApiError extends Error {

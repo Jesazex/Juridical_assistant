@@ -50,7 +50,7 @@ def test_from_message_accepts_citation_sequences(message, container):
         section_snapshot='section',
     ) for index in range(2)]
     response = MessageResponse.from_message(message, container(citations))
-    assert get_type_hints(MessageResponse.from_message)['citations'] == Sequence[AnswerCitation]
+    assert get_type_hints(MessageResponse.from_message)['citations'] == Sequence[AnswerCitation | MessageSource]
     assert response.model_dump() == {
         'id': message.id, 'chat_id': message.chat_id, 'reply_to_message_id': None,
         'role': 'user', 'content': message.content, 'status': 'completed',
@@ -58,7 +58,7 @@ def test_from_message_accepts_citation_sequences(message, container):
         'sources': [{
             'document_id': citation.document_id_snapshot,
             'document_title': citation.document_title_snapshot,
-            'chunk_id': citation.chunk_id, 'page': citation.page_snapshot,
+            'chunk_id': citation.chunk_id, 'version_id': None, 'page': citation.page_snapshot,
             'excerpt': citation.excerpt_snapshot, 'url': citation.url_snapshot,
             'section': citation.section_snapshot,
         } for citation in citations],
@@ -83,7 +83,7 @@ def test_from_message_preserves_assistant_fields(message, status):
 def test_message_source_allows_nullable_snapshot_fields():
     source = MessageSource.from_citation(AnswerCitation(document_title_snapshot='Document'))
     assert source.model_dump() == {
-        'document_id': None, 'document_title': 'Document', 'chunk_id': None,
+        'document_id': None, 'document_title': 'Document', 'chunk_id': None, 'version_id': None,
         'page': None, 'excerpt': None, 'url': None, 'section': None,
     }
 

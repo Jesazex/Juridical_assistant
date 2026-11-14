@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import type { Id } from "../api/types";
 import type { OpenDocument } from "../hooks/useWorkspace";
 import { locateExcerpt, safeHttpUrl } from "../lib/text";
 import { IconClose } from "./Icons";
@@ -6,9 +7,11 @@ import { IconClose } from "./Icons";
 export function DocumentDialog({
   opened,
   onClose,
+  onSelectVersion,
 }: {
   opened: OpenDocument;
   onClose: () => void;
+  onSelectVersion: (id: Id) => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const source = opened.source;
@@ -27,7 +30,7 @@ export function DocumentDialog({
 
   useEffect(() => {
     document.getElementById("excerpt-mark")?.scrollIntoView({ block: "center" });
-  }, [opened.doc?.id, source?.excerpt]);
+  }, [opened.doc?.id, opened.doc?.version_id, source?.excerpt]);
 
   return (
     <div className="dialog-layer" role="presentation">
@@ -42,6 +45,22 @@ export function DocumentDialog({
             <IconClose />
           </button>
         </header>
+        {opened.doc?.version_label ? <p className="dialog__note">{opened.doc.version_label}</p> : null}
+        {!source && (opened.doc?.versions?.length ?? 0) > 0 ? (
+          <label className="dialog__note">
+            Редакция{" "}
+            <select
+              value={String(opened.doc?.version_id ?? opened.doc?.selected_version_id ?? "")}
+              disabled={opened.loading}
+              onChange={(event) => { if (event.target.value) onSelectVersion(event.target.value); }}
+            >
+              <option value="" disabled>Выберите редакцию</option>
+              {opened.doc?.versions?.map((version) => (
+                <option key={version.id} value={version.id}>{version.version_label}</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         {opened.loading ? <p className="dialog__note">Загружаю текст…</p> : null}
         {opened.error ? <p className="dialog__note">{opened.error}</p> : null}
         {source?.excerpt ? (

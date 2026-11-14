@@ -13,6 +13,7 @@ from app.db.models.document_chunk import DocumentChunk
 from app.db.models.document_version import DocumentVersion
 from app.db.models.message import Message
 from app.db.repositories.chat_repository import get_owned_chat
+from app.schemas.message import MessageSource
 
 AUTO_TITLE_LENGTH = 80
 CITATION_PREVIEW_LENGTH = 320
@@ -226,9 +227,12 @@ async def fail_answer(
 
 async def list_answer_citations(
     session: AsyncSession, chat_id: UUID, owner_id: UUID, message_id: UUID
-) -> list[AnswerCitation]:
-    result = await session.scalars(
-        select(AnswerCitation)
+) -> list[MessageSource]:
+    # Версия вычисляется по FK chunk_id, без дублирования данных в snapshot.
+    # LEFT JOIN сохраняет старые цитаты, у которых chunk уже удалён.
+    result = await session.execute(
+        select(AnswerCitation, DocumentChunk.version_id)
+        .outerjoin(DocumentChunk, DocumentChunk.id == AnswerCitation.chunk_id)
         .join(Message, Message.id == AnswerCitation.message_id)
         .join(Chat, Chat.id == Message.chat_id)
         .where(
@@ -240,4 +244,4 @@ async def list_answer_citations(
         )
         .order_by(AnswerCitation.position)
     )
-    return list(result)
+    return [MessageSource.from_citation(citation, version_id) for citation, version_id in result]

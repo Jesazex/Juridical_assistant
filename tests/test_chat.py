@@ -320,7 +320,9 @@ def test_chat_routes_registered_in_application():
     assert set(paths['/api/v1/chats/{chat_id}/messages/']) == {'get', 'post'}
     assert set(paths['/api/v1/chats/{chat_id}/messages/{message_id}/retry']) == {'post'}
     assert paths['/api/v1/chats/{chat_id}/messages/']['post']['responses'].get('201')
-    assert not any('documents' in path for path in paths)
+    assert set(paths['/api/v1/documents/']) == {'get'}
+    assert set(paths['/api/v1/documents/{document_id}']) == {'get'}
+    assert set(paths['/api/v1/documents/{document_id}/versions/{version_id}']) == {'get'}
 
 
 @pytest.mark.parametrize('value', [

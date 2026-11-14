@@ -28,6 +28,7 @@ function normalizeSource(value: unknown): Source | null {
   if (!isRecord(value)) return null;
   const source: Source = {
     document_id: isId(value.document_id) ? value.document_id : null,
+    version_id: isId(value.version_id) ? value.version_id : null,
     document_title: typeof value.document_title === "string" ? value.document_title : null,
     chunk_id: isId(value.chunk_id) ? value.chunk_id : null,
     page: typeof value.page === "number" ? value.page : null,
@@ -224,8 +225,11 @@ export const httpApi: AssistantApi = {
     return page satisfies DocumentPage;
   },
 
-  async getDocument(id) {
-    const body = await readJson(await request(`/documents/${id}`), "Документ не найден.");
+  async getDocument(id, versionId) {
+    const path = versionId == null
+      ? `/documents/${encodeURIComponent(id)}`
+      : `/documents/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}`;
+    const body = await readJson(await request(path), "Документ не найден.");
     if (!isRecord(body) || !isId(body.id) || typeof body.title !== "string") {
       throw new ApiError(500, "Сервер вернул документ в неожиданном формате.");
     }
@@ -235,6 +239,14 @@ export const httpApi: AssistantApi = {
       title: body.title,
       text,
       group: normalizeGroup(body.group),
+      version_id: isId(body.version_id) ? body.version_id : null,
+      version_label: typeof body.version_label === "string" ? body.version_label : null,
+      selected_version_id: isId(body.selected_version_id) ? body.selected_version_id : null,
+      versions: Array.isArray(body.versions) ? body.versions.flatMap((version) =>
+        isRecord(version) && isId(version.id) && typeof version.version_label === "string"
+          ? [{ id: version.id, version_label: version.version_label }]
+          : [],
+      ) : [],
     } satisfies DocumentDetail;
   },
 };
