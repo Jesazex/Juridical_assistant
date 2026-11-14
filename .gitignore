@@ -12,5 +12,3 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
-node_modules/
-frontend/dist/
