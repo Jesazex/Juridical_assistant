@@ -12,6 +12,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.v1.router import api_router
 from app.db.session import create_database_engine, create_session_factory
 
+DEFAULT_CORS_ORIGINS = {
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+}
+
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
@@ -24,11 +31,13 @@ async def lifespan(application: FastAPI):
 
 
 def configured_origins() -> set[str]:
+    value = environ.get("PSB_CORS_ORIGINS", "").strip()
+    # Production задаёт полный список через окружение, заменяя локальные defaults.
     origins = {
         origin.strip().rstrip("/")
-        for origin in environ.get("PSB_CORS_ORIGINS", "").split(",")
+        for origin in value.split(",")
         if origin.strip()
-    }
+    } if value else DEFAULT_CORS_ORIGINS.copy()
     for origin in origins:
         parsed = urlsplit(origin)
         if (
@@ -54,6 +63,8 @@ app.state.cookie_secure = environ.get("PSB_COOKIE_SECURE", "").lower() in {"1", 
 async def check_write_origin(request: Request, call_next):
     if request.method in {"POST", "PATCH", "PUT", "DELETE"}:
         origin = request.headers.get("origin")
+        # Схема уже обработана Uvicorn только для доверенного proxy peer.
+        # Самостоятельно читать X-Forwarded-* здесь нельзя.
         request_origin = f"{request.url.scheme}://{request.headers.get('host', '')}"
         if origin is not None:
             allowed = origin in trusted_origins or origin.lower() == request_origin.lower()

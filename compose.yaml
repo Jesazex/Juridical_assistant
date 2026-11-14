@@ -38,6 +38,9 @@ services:
       PSB_DATABASE_HOST: knowledge-db
       PSB_KNOWLEDGE_ADMIN_PASSWORD: ${PSB_KNOWLEDGE_ADMIN_PASSWORD:?Set PSB_KNOWLEDGE_ADMIN_PASSWORD in .env}
       PSB_COOKIE_SECURE: ${PSB_COOKIE_SECURE:-false}
+      PSB_CORS_ORIGINS: ${PSB_CORS_ORIGINS:-}
+      # Uvicorn принимает forwarded-заголовки только от frontend Nginx.
+      FORWARDED_ALLOW_IPS: ${PSB_FRONTEND_PROXY_IP:-172.30.80.2}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -52,12 +55,15 @@ services:
     build: ./frontend
     environment:
       API_UPSTREAM: http://api:8000
+      PSB_PUBLIC_SCHEME: ${PSB_PUBLIC_SCHEME:-http}
     ports:
       - "127.0.0.1:${PSB_SITE_PORT:-8080}:80"
     depends_on:
       api:
         condition: service_healthy
-    networks: [web]
+    networks:
+      web:
+        ipv4_address: ${PSB_FRONTEND_PROXY_IP:-172.30.80.2}
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
       interval: 5s
@@ -70,3 +76,8 @@ volumes:
 networks:
   knowledge:
   web:
+    ipam:
+      config:
+        - subnet: ${PSB_WEB_SUBNET:-172.30.80.0/24}
+          # Динамические адреса API не пересекаются со статическим адресом Nginx.
+          ip_range: ${PSB_WEB_DYNAMIC_RANGE:-172.30.80.128/25}

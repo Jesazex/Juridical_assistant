@@ -14,6 +14,81 @@ docker compose up -d --build --wait
 
 Откройте `http://127.0.0.1:8080`. Nginx направляет `/api/v1/` на FastAPI, а отдельный сервис `migrate` применяет Alembic до старта API. По умолчанию порты сайта и базы доступны только с этого компьютера. Для запуска с отдельной прикладной учётной записью укажите `PSB_CONTAINER_DATABASE_URL` с адресом `knowledge-db:5432`. В локальной конфигурации без этого параметра API использует учётную запись администратора. При HTTPS включите `PSB_COOKIE_SECURE=true`.
 
+### Origin, cookies и HTTPS
+
+В браузере API всегда доступен по относительному `/api/v1` на том же origin,
+что и сайт. Nginx сохраняет исходный `Host` вместе с портом. Anonymous cookie
+имеет `HttpOnly`, `SameSite=Lax`, `Path=/` и передаётся с `credentials: include`.
+Не смешивайте `localhost` и `127.0.0.1` в одной сессии: cookies привязаны к хосту.
+
+Локальные настройки `.env`:
+
+```dotenv
+PSB_PUBLIC_SCHEME=http
+PSB_COOKIE_SECURE=false
+PSB_CORS_ORIGINS=http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173
+PSB_DEV_API_UPSTREAM=http://127.0.0.1:8000
+```
+
+Если `PSB_CORS_ORIGINS` не задан или пуст, используются перечисленные четыре
+локальных origin. Непустое значение **заменяет** список; несколько origin
+разделяются запятыми. Same-origin запросы разрешены также на других портах.
+Проверка Origin и запрет межсайтовых запросов без Origin сохраняются.
+
+Для Vite запустите PostgreSQL через Compose, backend из корня проекта командой
+`python -m uvicorn app.main:app --env-file .env --host 127.0.0.1 --port 8000`,
+а из `frontend/` — `npm ci` и `npm run dev`. Dev/preview-прокси читает
+`PSB_DEV_API_UPSTREAM` из общего `.env` и сохраняет Host браузера.
+Контейнерный API наружу не опубликован; Vite по умолчанию обращается к backend,
+запущенному на хосте.
+
+Для production завершайте TLS на внешнем reverse proxy на том же сервере.
+Он направляет сайт и `/api/` на `http://127.0.0.1:8080`, сохраняет исходный Host
+и перенаправляет внешний HTTP на HTTPS. Пример location внутри существующего
+HTTPS server с настроенным сертификатом:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+В `.env` на сервере задайте свой домен:
+
+```dotenv
+PSB_PUBLIC_SCHEME=https
+PSB_COOKIE_SECURE=true
+PSB_CORS_ORIGINS=https://example.com
+```
+
+`PSB_PUBLIC_SCHEME` — внешняя схема (`http` или `https`). Внутренний frontend
+Nginx выставляет её из окружения, **не доверяя** полученному от клиента
+`X-Forwarded-Proto`; это сохраняет HTTPS после TLS termination. Uvicorn доверяет
+forwarded-заголовкам только от фиксированного IP frontend Nginx. Сам FastAPI
+не интерпретирует произвольные forwarded-заголовки.
+
+По умолчанию выделенная сеть API/frontend — `172.30.80.0/24`, IP Nginx —
+`172.30.80.2`. Динамический пул `PSB_WEB_DYNAMIC_RANGE=172.30.80.128/25`
+не включает статический IP Nginx. При конфликте сети измените `PSB_WEB_SUBNET`,
+`PSB_WEB_DYNAMIC_RANGE` и `PSB_FRONTEND_PROXY_IP` в `.env`, сохранив это разделение;
+Compose использует последний и как адрес Nginx,
+и как `FORWARDED_ALLOW_IPS` для Uvicorn. Не заменяйте его на `*`.
+Порты API остаются внутренними, а frontend опубликован на loopback для внешнего
+reverse proxy. Исходный код и frontend-сборка от домена не зависят.
+
+При первом переходе со старой сети пересоздайте Compose-сеть; том PostgreSQL
+сохраняется:
+
+```powershell
+docker compose down
+docker compose up -d --build --wait
+```
+
+После последующих изменений `.env` достаточно второй команды, чтобы применить
+окружение к пересозданным контейнерам.
+
 Пока сервис генерации не подключён, отправленный вопрос сохраняется, а ответ получает статус `failed` с кодом `generation_unavailable`. Повторная попытка использует существующий ответ. Каталог показывает документы, загруженные в PostgreSQL.
 
 ## Корпус и поиск
